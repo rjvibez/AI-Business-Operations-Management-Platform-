@@ -18,6 +18,14 @@ def load_model(model_path=MODEL_PATH):
     return joblib.load(model_path)
 
 
+@lru_cache(maxsize=1)
+def load_data(csv_path):
+    path = Path(csv_path)
+    if not path.exists():
+        raise FileNotFoundError(f'Recommendation dataset not found at {path}.')
+    return pd.read_csv(path)
+
+
 def recommend_employees(data, top_n=5, model=None):
     if top_n < 1:
         raise ValueError('top_n must be at least 1.')
@@ -74,8 +82,8 @@ def recommend_for_task(data, task, top_n=5, model=None):
 
 
 def recommend_from_csv(csv_path, top_n=5, model=None):
-    return recommend_employees(pd.read_csv(csv_path), top_n=top_n, model=model)
+    return recommend_employees(load_data(str(csv_path)), top_n=top_n, model=model)
 
 
 def recommend_task_from_csv(csv_path, task, top_n=5, model=None):
-    return recommend_for_task(pd.read_csv(csv_path), task, top_n=top_n, model=model)
+    return recommend_for_task(load_data(str(csv_path)), task, top_n=top_n, model=model)
