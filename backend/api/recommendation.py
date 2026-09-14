@@ -1,4 +1,5 @@
 from pathlib import Path
+from functools import lru_cache
 
 import joblib
 import pandas as pd
@@ -7,6 +8,7 @@ import pandas as pd
 MODEL_PATH = Path(__file__).resolve().parents[2] / 'models' / 'employee_recommendation_model.pkl'
 
 
+@lru_cache(maxsize=1)
 def load_model(model_path=MODEL_PATH):
     if not Path(model_path).exists():
         raise FileNotFoundError(
