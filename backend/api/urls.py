@@ -6,9 +6,11 @@ from .views import (
     ProjectDetailView,
     ProjectListCreateView,
     RecommendationListView,
+    health_check,
 )
 
 urlpatterns = [
+    path('health/', health_check, name='health'),
     path('employees/', EmployeeListCreateView.as_view(), name='employee-list-create'),
     path('employees/<str:employee_id>/', EmployeeDetailView.as_view(), name='employee-detail'),
     path('projects/', ProjectListCreateView.as_view(), name='project-list-create'),

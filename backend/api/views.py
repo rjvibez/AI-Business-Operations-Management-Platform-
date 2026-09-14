@@ -1,3 +1,4 @@
+from django.http import JsonResponse
 from django.shortcuts import render
 from rest_framework import generics, status
 from rest_framework.views import APIView
@@ -9,6 +10,10 @@ from .serializers import EmployeeSerializer, ProjectSerializer
 
 
 DATASET_PATH = __import__('pathlib').Path(__file__).resolve().parents[2] / 'datasets' / 'cleaned' / 'Business_Operation_ml_ready.csv'
+
+
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
 
 
 class EmployeeListCreateView(generics.ListCreateAPIView):

@@ -1,6 +1,15 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const API_BASE_URL = configuredBaseUrl
+  ? configuredBaseUrl.replace(/\/$/, '')
+  : import.meta.env.DEV
+    ? 'http://localhost:8000/api'
+    : '';
 
 async function apiRequest(endpoint, options = {}) {
+  if (!API_BASE_URL) {
+    throw new Error('The production API URL is not configured. Set VITE_API_BASE_URL in Vercel.');
+  }
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
