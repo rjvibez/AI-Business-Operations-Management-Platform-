@@ -1,6 +1,7 @@
+import uuid
 from rest_framework import serializers
 
-from .models import Employee, Project
+from .models import Employee, Finance, Project
 
 
 class EmployeeSerializer(serializers.ModelSerializer):
@@ -36,3 +37,38 @@ class ProjectSerializer(serializers.ModelSerializer):
             'risk_level',
         ]
         read_only_fields = ['project_id']
+
+
+class FinanceSerializer(serializers.ModelSerializer):
+    finance_id = serializers.CharField(required=False)
+    project_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    class Meta:
+        model = Finance
+        fields = [
+            'finance_id',
+            'project_id',
+            'expense_type',
+            'amount',
+            'expense_date',
+            'approval_status',
+            'approved_by',
+            'is_anomaly',
+        ]
+
+    def create(self, validated_data):
+        if not validated_data.get('finance_id'):
+            validated_data['finance_id'] = f"FIN{uuid.uuid4().hex[:6].upper()}"
+        return super().create(validated_data)
+
+
+class TaskCompletionPredictionSerializer(serializers.Serializer):
+    estimated_hours = serializers.FloatField(default=10.0)
+    experience_years = serializers.FloatField(default=5.0)
+    allocation_score = serializers.FloatField(default=80.0)
+    workload_percentage = serializers.FloatField(default=50.0)
+    performance_score = serializers.FloatField(default=85.0)
+    active_tasks = serializers.IntegerField(default=2)
+    task_priority = serializers.CharField(default='Medium', required=False)
+    duration_days = serializers.FloatField(default=14.0)
+

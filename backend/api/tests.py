@@ -3,13 +3,21 @@ from django.urls import resolve, reverse
 import pandas as pd
 
 from .recommendation import recommend_employees, recommend_for_task
-from .serializers import EmployeeSerializer, ProjectSerializer
+from .serializers import (
+    EmployeeSerializer,
+    FinanceSerializer,
+    ProjectSerializer,
+    TaskCompletionPredictionSerializer,
+)
 from .views import (
     EmployeeDetailView,
     EmployeeListCreateView,
+    FinanceDetailView,
+    FinanceListCreateView,
     ProjectDetailView,
     ProjectListCreateView,
     RecommendationListView,
+    TaskCompletionPredictionView,
 )
 
 
@@ -32,6 +40,41 @@ class EmployeeProjectApiRouteTests(SimpleTestCase):
     def test_project_urls_resolve(self):
         self.assertEqual(resolve('/api/projects/').func.view_class, ProjectListCreateView)
         self.assertEqual(resolve('/api/projects/P001/').func.view_class, ProjectDetailView)
+
+    def test_finance_urls_resolve(self):
+        self.assertEqual(resolve('/api/finance/').func.view_class, FinanceListCreateView)
+        self.assertEqual(resolve('/api/finance/FIN001/').func.view_class, FinanceDetailView)
+
+    def test_task_completion_url_resolves(self):
+        self.assertEqual(resolve('/api/ml/task-completion/').func.view_class, TaskCompletionPredictionView)
+
+    def test_finance_serializer_valid(self):
+        payload = {
+            'finance_id': 'FIN001',
+            'project_id': 'P001',
+            'expense_type': 'Cloud Infrastructure',
+            'amount': '1500.00',
+            'expense_date': '2026-09-14',
+            'approval_status': 'Approved',
+            'approved_by': 'Admin',
+            'is_anomaly': False,
+        }
+        serializer = FinanceSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_task_completion_serializer_valid(self):
+        payload = {
+            'estimated_hours': 10,
+            'experience_years': 5,
+            'allocation_score': 80,
+            'workload_percentage': 40,
+            'performance_score': 85,
+            'active_tasks': 2,
+            'task_priority': 'High',
+            'duration_days': 15,
+        }
+        serializer = TaskCompletionPredictionSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_recommendation_url_resolves(self):
         self.assertEqual(resolve('/api/recommendations/').func.view_class, RecommendationListView)

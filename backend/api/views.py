@@ -4,9 +4,15 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from .models import Employee, Project
+from .models import Employee, Finance, Project
 from .recommendation import recommend_task_from_csv
-from .serializers import EmployeeSerializer, ProjectSerializer
+from .serializers import (
+    EmployeeSerializer,
+    FinanceSerializer,
+    ProjectSerializer,
+    TaskCompletionPredictionSerializer,
+)
+from .task_prediction import predict_completion_hours
 
 
 DATASET_PATH = __import__('pathlib').Path(__file__).resolve().parents[2] / 'datasets' / 'cleaned' / 'Business_Operation_ml_ready.csv'
@@ -38,6 +44,17 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
     lookup_field = 'project_id'
 
 
+class FinanceListCreateView(generics.ListCreateAPIView):
+    queryset = Finance.objects.all()
+    serializer_class = FinanceSerializer
+
+
+class FinanceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Finance.objects.all()
+    serializer_class = FinanceSerializer
+    lookup_field = 'finance_id'
+
+
 class RecommendationListView(APIView):
     def get(self, request):
         try:
@@ -54,3 +71,23 @@ class RecommendationListView(APIView):
             return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         return Response(recommendations.to_dict(orient='records'))
+
+
+class TaskCompletionPredictionView(APIView):
+    def post(self, request):
+        serializer = TaskCompletionPredictionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            predicted_hours = predict_completion_hours(serializer.validated_data)
+        except FileNotFoundError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except Exception as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({
+            'predicted_hours': predicted_hours,
+            'input_parameters': serializer.validated_data,
+        })
+

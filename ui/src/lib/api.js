@@ -1,9 +1,11 @@
-const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-const API_BASE_URL = configuredBaseUrl
+export const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+export const API_BASE_URL = configuredBaseUrl
   ? configuredBaseUrl.replace(/\/$/, '')
   : import.meta.env.DEV
     ? 'http://localhost:8000/api'
     : '';
+
+export const isApiConfigured = Boolean(API_BASE_URL);
 
 async function apiRequest(endpoint, options = {}) {
   if (!API_BASE_URL) {
@@ -46,6 +48,24 @@ export async function fetchProjects() {
   return apiRequest('/projects/');
 }
 
+export async function createProject(payload) {
+  return apiRequest('/projects/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchFinance() {
+  return apiRequest('/finance/');
+}
+
+export async function createFinance(payload) {
+  return apiRequest('/finance/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchRecommendations({ topN = 5, requiredSkill = '', department = '', priority = '' } = {}) {
   const params = new URLSearchParams({ top_n: topN });
 
@@ -56,9 +76,10 @@ export async function fetchRecommendations({ topN = 5, requiredSkill = '', depar
   return apiRequest(`/recommendations/?${params.toString()}`);
 }
 
-export async function createProject(payload) {
-  return apiRequest('/projects/', {
+export async function predictTaskCompletion(payload) {
+  return apiRequest('/ml/task-completion/', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
+
