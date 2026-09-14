@@ -3,7 +3,7 @@ export const API_BASE_URL = configuredBaseUrl
   ? configuredBaseUrl.replace(/\/$/, '')
   : import.meta.env.DEV
     ? 'http://localhost:8000/api'
-    : '';
+    : '/api';
 
 export const isApiConfigured = Boolean(API_BASE_URL);
 

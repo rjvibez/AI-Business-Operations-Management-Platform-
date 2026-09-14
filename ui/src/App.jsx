@@ -176,7 +176,7 @@ function App() {
                 <h3>System Architecture & API Connectivity</h3>
                 <p>
                   {isApiConfigured
-                    ? `Connected to Django REST API (${configuredBaseUrl})`
+                    ? `Connected to Django REST API (${configuredBaseUrl || API_BASE_URL})`
                     : "Development Mode (Connects to local backend or Vercel production API URL)"}
                 </p>
               </div>

@@ -1,0 +1,20 @@
+# Ignore everything outside ui for Vercel frontend deployment
+models/
+backend/
+database/
+datasets/
+docs/
+eda/
+architecture/
+presentation/
+sql/
+finance_module/
+AI Recommendation System/
+AI Recommendation
+*.pdf
+*.pkl
+*.xls
+*.ipynb
+node_modules
+ui/node_modules
+ui/dist

@@ -5,7 +5,7 @@ import joblib
 import pandas as pd
 
 
-MODEL_PATH = Path(__file__).resolve().parents[2] / 'models' / 'employee_recommendation_model.pkl'
+MODEL_PATH = Path(__file__).resolve().parents[2] / 'models' / 'employee_recommendation_model_lite.pkl'
 
 
 @lru_cache(maxsize=1)
