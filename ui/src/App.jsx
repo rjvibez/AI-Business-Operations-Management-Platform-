@@ -1617,21 +1617,30 @@ function FinanceOperations() {
                       </tr>
                     ) : (
                       paginatedBudgets.map((b, idx) => {
-                        const pct = Math.min(Math.round(b.percent || (b.limit_amount > 0 ? (b.used_amount / b.limit_amount) * 100 : 0)), 100);
-                        const progressClass = pct > 90 ? "danger" : pct > 70 ? "warning" : "safe";
+                        const limitVal = parseFloat(b.limit_amount) || 0;
+                        const usedVal = parseFloat(b.used_amount) || 0;
+                        const actualPct = Math.round(
+                          b.percent != null && !isNaN(b.percent)
+                            ? Number(b.percent)
+                            : limitVal > 0
+                              ? (usedVal / limitVal) * 100
+                              : 0
+                        );
+                        const progressWidth = Math.min(Math.max(actualPct, 0), 100);
+                        const progressClass = actualPct > 90 ? "danger" : actualPct > 70 ? "warning" : "safe";
 
                         return (
                           <tr key={`${b.department}-${b.category}-${idx}`}>
                             <td style={{ fontWeight: "600" }}>{b.department}</td>
                             <td>{b.category}</td>
-                            <td>${parseFloat(b.limit_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                            <td>${parseFloat(b.used_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>${limitVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>${usedVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td>
                               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "600" }}>
-                                <span>{pct}%</span>
+                                <span style={{ color: actualPct > 100 ? "#ef4444" : undefined }}>{actualPct}%</span>
                               </div>
                               <div className="budget-progress-track">
-                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${pct}%` }} />
+                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${progressWidth}%` }} />
                               </div>
                             </td>
                             <td>
