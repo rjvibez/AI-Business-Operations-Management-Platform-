@@ -858,13 +858,21 @@ function FinanceOperations() {
   const [priorityFilter, setPriorityFilter] = useState("All");
   const [severityFilter, setSeverityFilter] = useState("All");
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
+  // Pagination (independent per tab, 100 records per page)
+  const [expensesPage, setExpensesPage] = useState(1);
+  const [budgetsPage, setBudgetsPage] = useState(1);
+  const [invoicesPage, setInvoicesPage] = useState(1);
+  const [approvalPage, setApprovalPage] = useState(1);
+  const [anomalyPage, setAnomalyPage] = useState(1);
   const pageSize = 100;
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
-    setCurrentPage(1);
+    setExpensesPage(1);
+    setBudgetsPage(1);
+    setInvoicesPage(1);
+    setApprovalPage(1);
+    setAnomalyPage(1);
   };
 
   // Modals
@@ -916,10 +924,14 @@ function FinanceOperations() {
     loadFinanceData();
   }, []);
 
-  // Reset page upon tab or filter changes
+  // Reset pages upon filter changes
   useEffect(() => {
-    setCurrentPage(1);
-  }, [activeTab, searchTerm, departmentFilter, priorityFilter, severityFilter]);
+    setExpensesPage(1);
+    setBudgetsPage(1);
+    setInvoicesPage(1);
+    setApprovalPage(1);
+    setAnomalyPage(1);
+  }, [searchTerm, departmentFilter, priorityFilter, severityFilter]);
 
   // Derived Summary Metrics
   const summaryMetrics = useMemo(() => {
@@ -1134,11 +1146,11 @@ function FinanceOperations() {
   };
 
   // Slice paginated items (100 records per page)
-  const paginatedExpenses = getSlice(filteredExpenses, currentPage);
-  const paginatedBudgets = getSlice(filteredBudgets, currentPage);
-  const paginatedInvoices = getSlice(filteredInvoices, currentPage);
-  const paginatedPending = getSlice(filteredPending, currentPage);
-  const paginatedAnomalies = getSlice(filteredAnomalies, currentPage);
+  const paginatedExpenses = getSlice(filteredExpenses, expensesPage);
+  const paginatedBudgets = getSlice(filteredBudgets, budgetsPage);
+  const paginatedInvoices = getSlice(filteredInvoices, invoicesPage);
+  const paginatedPending = getSlice(filteredPending, approvalPage);
+  const paginatedAnomalies = getSlice(filteredAnomalies, anomalyPage);
 
   // Pagination helper
   const renderPagination = (totalItems, page, setPage) => {
@@ -1600,7 +1612,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(filteredExpenses.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredExpenses.length, expensesPage, setExpensesPage)}
               </>
             )}
 
@@ -1646,19 +1658,19 @@ function FinanceOperations() {
                       </tr>
                     ) : (
                       paginatedBudgets.map((b, idx) => {
-                        const limitVal = parseFloat(b.limit_amount) || 0;
-                        const usedVal = parseFloat(b.used_amount) || 0;
-                        const rawRatio = limitVal > 0 ? (usedVal / limitVal) * 100 : 0;
-                        const isOverBudget = usedVal > limitVal || rawRatio >= 100;
-                        const cappedPct = Math.min(Math.round(rawRatio), 100);
+                        const limitVal = parseFloat(b.limit_amount ?? b.limit ?? b.budget_limit ?? b.budget_allocated ?? 0) || 0;
+                        const usedVal = parseFloat(b.used_amount ?? b.used ?? b.budget_used ?? b.amount ?? 0) || 0;
+                        const rawUtilization = limitVal > 0 ? (usedVal / limitVal) * 100 : 0;
+                        const displayUtilization = Math.min(Math.round(rawUtilization), 100);
+                        const isOverBudget = usedVal > limitVal;
 
-                        let colorHex = "#10b981"; // <80% = green
+                        let colorHex = "#10b981"; // < 80% → green
                         let progressClass = "safe";
-                        if (cappedPct >= 100) {
-                          colorHex = "#ef4444"; // >=100% = red
+                        if (displayUtilization >= 100) {
+                          colorHex = "#ef4444"; // = 100% → red
                           progressClass = "danger";
-                        } else if (cappedPct >= 80) {
-                          colorHex = "#f59e0b"; // 80% to <100% = yellow/orange
+                        } else if (displayUtilization >= 80) {
+                          colorHex = "#f59e0b"; // = 80% and < 100% → yellow/orange
                           progressClass = "warning";
                         }
 
@@ -1670,7 +1682,7 @@ function FinanceOperations() {
                             <td>${usedVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "600" }}>
-                                <span style={{ color: colorHex }}>{cappedPct}%</span>
+                                <span style={{ color: colorHex }}>{displayUtilization}%</span>
                                 {isOverBudget && (
                                   <span style={{ fontSize: "10px", fontWeight: "700", padding: "1px 6px", borderRadius: "4px", background: "#fee2e2", color: "#b91c1c", letterSpacing: "0.3px" }}>
                                     Over Budget
@@ -1678,7 +1690,7 @@ function FinanceOperations() {
                                 )}
                               </div>
                               <div className="budget-progress-track">
-                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${cappedPct}%` }} />
+                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${displayUtilization}%` }} />
                               </div>
                             </td>
                             <td>
@@ -1714,7 +1726,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(filteredBudgets.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredBudgets.length, budgetsPage, setBudgetsPage)}
               </>
             )}
 
@@ -1797,7 +1809,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(filteredInvoices.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredInvoices.length, invoicesPage, setInvoicesPage)}
               </>
             )}
 
@@ -1883,7 +1895,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(filteredPending.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredPending.length, approvalPage, setApprovalPage)}
               </>
             )}
 
@@ -1991,7 +2003,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(filteredAnomalies.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredAnomalies.length, anomalyPage, setAnomalyPage)}
               </>
             )}
 
