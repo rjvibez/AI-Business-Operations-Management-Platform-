@@ -859,7 +859,12 @@ function FinanceOperations() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 20;
+  const pageSize = 100;
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
 
   // Modals
   const [csvModalOpen, setCsvModalOpen] = useState(false);
@@ -1086,9 +1091,21 @@ function FinanceOperations() {
     });
   }, [invoices, searchTerm]);
 
-  const pendingExpenses = useMemo(() => {
-    return expenses.filter((e) => (e.approval_status || "").toLowerCase() === "pending");
-  }, [expenses]);
+  const filteredPending = useMemo(() => {
+    return expenses.filter((e) => {
+      const isPending = (e.approval_status || "").toLowerCase() === "pending";
+      if (!isPending) return false;
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        !q ||
+        (e.expense_id || "").toLowerCase().includes(q) ||
+        (e.department || "").toLowerCase().includes(q) ||
+        (e.category || "").toLowerCase().includes(q) ||
+        (e.vendor_name || e.vendor || "").toLowerCase().includes(q);
+      const matchesDept = departmentFilter === "All" || e.department === departmentFilter;
+      return matchesSearch && matchesDept;
+    });
+  }, [expenses, searchTerm, departmentFilter]);
 
   const filteredAnomalies = useMemo(() => {
     const list = anomaliesData.anomalies || [];
@@ -1106,25 +1123,40 @@ function FinanceOperations() {
     });
   }, [anomaliesData, searchTerm, severityFilter]);
 
+  // Safe slicing helper ensuring page bounds
+  const getSlice = (items, page) => {
+    const totalPages = Math.ceil(items.length / pageSize) || 1;
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    return items.slice((safePage - 1) * pageSize, safePage * pageSize);
+  };
+
+  // Slice paginated items (100 records per page)
+  const paginatedExpenses = getSlice(filteredExpenses, currentPage);
+  const paginatedBudgets = getSlice(filteredBudgets, currentPage);
+  const paginatedInvoices = getSlice(filteredInvoices, currentPage);
+  const paginatedPending = getSlice(filteredPending, currentPage);
+  const paginatedAnomalies = getSlice(filteredAnomalies, currentPage);
+
   // Pagination helper
   const renderPagination = (totalItems, page, setPage) => {
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
-    if (totalPages <= 1) return null;
+    if (totalItems === 0) return null;
 
-    const start = (page - 1) * pageSize + 1;
-    const end = Math.min(page * pageSize, totalItems);
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const safePage = Math.min(Math.max(page, 1), totalPages);
+    const start = (safePage - 1) * pageSize + 1;
+    const end = Math.min(safePage * pageSize, totalItems);
 
     const getPageNumbers = () => {
       const pages = [];
       if (totalPages <= 7) {
         for (let i = 1; i <= totalPages; i++) pages.push(i);
       } else {
-        if (page <= 4) {
+        if (safePage <= 4) {
           pages.push(1, 2, 3, 4, 5, "...", totalPages);
-        } else if (page >= totalPages - 3) {
+        } else if (safePage >= totalPages - 3) {
           pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
         } else {
-          pages.push(1, "...", page - 1, page, page + 1, "...", totalPages);
+          pages.push(1, "...", safePage - 1, safePage, safePage + 1, "...", totalPages);
         }
       }
       return pages;
@@ -1145,23 +1177,23 @@ function FinanceOperations() {
         }}
       >
         <span style={{ fontSize: "13px", color: "#6b7280" }}>
-          Showing {start.toLocaleString()}–{end.toLocaleString()} of {totalItems.toLocaleString()} records
+          Showing {start.toLocaleString()}–{end.toLocaleString()} of {totalItems.toLocaleString()}
         </span>
 
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <button
             className="pagination-btn"
-            disabled={page <= 1}
+            disabled={safePage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             style={{
               padding: "6px 12px",
               borderRadius: "6px",
               border: "1px solid #d1d5db",
-              background: page <= 1 ? "#f3f4f6" : "#ffffff",
-              color: page <= 1 ? "#9ca3af" : "#374151",
+              background: safePage <= 1 ? "#f3f4f6" : "#ffffff",
+              color: safePage <= 1 ? "#9ca3af" : "#374151",
               fontSize: "12px",
               fontWeight: "500",
-              cursor: page <= 1 ? "not-allowed" : "pointer",
+              cursor: safePage <= 1 ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               gap: "4px",
@@ -1183,11 +1215,11 @@ function FinanceOperations() {
                   padding: "6px 11px",
                   borderRadius: "6px",
                   border: "1px solid",
-                  borderColor: page === pNum ? "#2563eb" : "#d1d5db",
-                  background: page === pNum ? "#2563eb" : "#ffffff",
-                  color: page === pNum ? "#ffffff" : "#374151",
+                  borderColor: safePage === pNum ? "#2563eb" : "#d1d5db",
+                  background: safePage === pNum ? "#2563eb" : "#ffffff",
+                  color: safePage === pNum ? "#ffffff" : "#374151",
                   fontSize: "12px",
-                  fontWeight: page === pNum ? "600" : "500",
+                  fontWeight: safePage === pNum ? "600" : "500",
                   cursor: "pointer",
                   minWidth: "32px",
                 }}
@@ -1199,17 +1231,17 @@ function FinanceOperations() {
 
           <button
             className="pagination-btn"
-            disabled={page >= totalPages}
+            disabled={safePage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             style={{
               padding: "6px 12px",
               borderRadius: "6px",
               border: "1px solid #d1d5db",
-              background: page >= totalPages ? "#f3f4f6" : "#ffffff",
-              color: page >= totalPages ? "#9ca3af" : "#374151",
+              background: safePage >= totalPages ? "#f3f4f6" : "#ffffff",
+              color: safePage >= totalPages ? "#9ca3af" : "#374151",
               fontSize: "12px",
               fontWeight: "500",
-              cursor: page >= totalPages ? "not-allowed" : "pointer",
+              cursor: safePage >= totalPages ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               gap: "4px",
@@ -1221,12 +1253,6 @@ function FinanceOperations() {
       </div>
     );
   };
-
-  // Slice paginated items
-  const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const paginatedBudgets = filteredBudgets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const paginatedInvoices = filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-  const paginatedAnomalies = filteredAnomalies.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <>
@@ -1480,7 +1506,7 @@ function FinanceOperations() {
                       <input
                         placeholder="Search expenses..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={handleSearchChange}
                       />
                     </div>
 
@@ -1590,7 +1616,7 @@ function FinanceOperations() {
                       <input
                         placeholder="Search department/category..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={handleSearchChange}
                       />
                     </div>
                   </div>
@@ -1619,15 +1645,19 @@ function FinanceOperations() {
                       paginatedBudgets.map((b, idx) => {
                         const limitVal = parseFloat(b.limit_amount) || 0;
                         const usedVal = parseFloat(b.used_amount) || 0;
-                        const actualPct = Math.round(
-                          b.percent != null && !isNaN(b.percent)
-                            ? Number(b.percent)
-                            : limitVal > 0
-                              ? (usedVal / limitVal) * 100
-                              : 0
-                        );
-                        const progressWidth = Math.min(Math.max(actualPct, 0), 100);
-                        const progressClass = actualPct > 90 ? "danger" : actualPct > 70 ? "warning" : "safe";
+                        const rawRatio = limitVal > 0 ? (usedVal / limitVal) * 100 : 0;
+                        const isOverBudget = usedVal > limitVal || rawRatio >= 100;
+                        const cappedPct = Math.min(Math.round(rawRatio), 100);
+
+                        let colorHex = "#10b981"; // <80% = green
+                        let progressClass = "safe";
+                        if (cappedPct >= 100) {
+                          colorHex = "#ef4444"; // >=100% = red
+                          progressClass = "danger";
+                        } else if (cappedPct >= 80) {
+                          colorHex = "#f59e0b"; // 80% to <100% = yellow/orange
+                          progressClass = "warning";
+                        }
 
                         return (
                           <tr key={`${b.department}-${b.category}-${idx}`}>
@@ -1636,11 +1666,16 @@ function FinanceOperations() {
                             <td>${limitVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td>${usedVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                             <td>
-                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "600" }}>
-                                <span style={{ color: actualPct > 100 ? "#ef4444" : undefined }}>{actualPct}%</span>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", fontWeight: "600" }}>
+                                <span style={{ color: colorHex }}>{cappedPct}%</span>
+                                {isOverBudget && (
+                                  <span style={{ fontSize: "10px", fontWeight: "700", padding: "1px 6px", borderRadius: "4px", background: "#fee2e2", color: "#b91c1c", letterSpacing: "0.3px" }}>
+                                    Over Budget
+                                  </span>
+                                )}
                               </div>
                               <div className="budget-progress-track">
-                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${progressWidth}%` }} />
+                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${cappedPct}%` }} />
                               </div>
                             </td>
                             <td>
@@ -1695,7 +1730,7 @@ function FinanceOperations() {
                       <input
                         placeholder="Search invoice/vendor..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={handleSearchChange}
                       />
                     </div>
                   </div>
@@ -1766,14 +1801,24 @@ function FinanceOperations() {
             {/* TAB 4: APPROVAL QUEUE */}
             {activeTab === "approval" && (
               <>
-                <div className="panel-header">
+                <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px" }}>
                   <div>
                     <h3>Pending Expense Approval Queue</h3>
                     <p>Review and authorize pending disbursements with real-time backend updates</p>
                   </div>
-                  <span className="badge pending">
-                    {pendingExpenses.length} Pending Review
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="search" style={{ width: "220px" }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search pending..."
+                        value={searchTerm}
+                        onChange={handleSearchChange}
+                      />
+                    </div>
+                    <span className="badge pending">
+                      {filteredPending.length} Pending Review
+                    </span>
+                  </div>
                 </div>
 
                 <table>
@@ -1789,15 +1834,17 @@ function FinanceOperations() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendingExpenses.length === 0 ? (
+                    {paginatedPending.length === 0 ? (
                       <tr>
                         <td colSpan="7" style={{ textAlign: "center", padding: "36px", color: "#10b981", fontWeight: "600" }}>
                           <CheckCircle size={32} style={{ display: "block", margin: "0 auto 8px" }} />
-                          All expenses have been reviewed. Approval queue is completely clear!
+                          {filteredPending.length === 0 && searchTerm
+                            ? "No pending expenses matching search criteria."
+                            : "All expenses have been reviewed. Approval queue is completely clear!"}
                         </td>
                       </tr>
                     ) : (
-                      pendingExpenses.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((e) => (
+                      paginatedPending.map((e) => (
                         <tr key={e.expense_id}>
                           <td style={{ fontWeight: "600", color: "#2563eb" }}>{e.expense_id}</td>
                           <td>{e.department}</td>
@@ -1833,7 +1880,7 @@ function FinanceOperations() {
                   </tbody>
                 </table>
 
-                {renderPagination(pendingExpenses.length, currentPage, setCurrentPage)}
+                {renderPagination(filteredPending.length, currentPage, setCurrentPage)}
               </>
             )}
 
@@ -1871,7 +1918,7 @@ function FinanceOperations() {
                       <input
                         placeholder="Search anomalies..."
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onChange={handleSearchChange}
                       />
                     </div>
 
