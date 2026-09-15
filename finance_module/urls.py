@@ -3,7 +3,7 @@ from . import views
 from api.views import FinanceDetailView, FinanceListCreateView
 
 urlpatterns = [
-    path('', FinanceListCreateView.as_view(), name='finance_home'),
+    path('', views.dashboard, name='finance_home'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('expenses/', views.expense_list, name='expenses'),
     path('budgets/', views.budget_list, name='budgets'),

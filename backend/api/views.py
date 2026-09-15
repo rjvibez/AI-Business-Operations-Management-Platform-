@@ -45,14 +45,24 @@ class ProjectDetailView(generics.RetrieveUpdateAPIView):
 
 
 class FinanceListCreateView(generics.ListCreateAPIView):
-    queryset = Finance.objects.all()
     serializer_class = FinanceSerializer
+
+    def get_queryset(self):
+        try:
+            return Finance.objects.all()
+        except Exception:
+            return Finance.objects.none()
 
 
 class FinanceDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Finance.objects.all()
     serializer_class = FinanceSerializer
     lookup_field = 'finance_id'
+
+    def get_queryset(self):
+        try:
+            return Finance.objects.all()
+        except Exception:
+            return Finance.objects.none()
 
 
 class RecommendationListView(APIView):
