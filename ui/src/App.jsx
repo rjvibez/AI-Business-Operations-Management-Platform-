@@ -1698,10 +1698,10 @@ function FinanceOperations() {
                                 className={`priority-tag ${(b.priority || "Medium").toLowerCase()}`}
                                 style={
                                   (b.priority || "").toLowerCase() === "high"
-                                    ? { background: "#fee2e2", color: "#b91c1c" }
+                                    ? { background: "#fee2e2", color: "#dc2626", border: "1px solid #fca5a5" }
                                     : (b.priority || "").toLowerCase() === "low"
-                                    ? { background: "#d1fae5", color: "#065f46" }
-                                    : { background: "#fef3c7", color: "#92400e" }
+                                    ? { background: "#dcfce7", color: "#16a34a", border: "1px solid #bbf7d0" }
+                                    : { background: "#ffedd5", color: "#ea580c", border: "1px solid #fed7aa" }
                                 }
                               >
                                 {b.priority || "Medium"}

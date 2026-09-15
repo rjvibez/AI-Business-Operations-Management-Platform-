@@ -774,17 +774,20 @@ td {
 
 .priority-tag.high {
   background: #fee2e2;
-  color: #991b1b;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
 }
 
 .priority-tag.medium {
-  background: #fef3c7;
-  color: #92400e;
+  background: #ffedd5;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
 }
 
 .priority-tag.low {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: #dcfce7;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
 }
 
 /* Action buttons */
