@@ -1091,10 +1091,12 @@ function FinanceOperations() {
     });
   }, [invoices, searchTerm]);
 
+  const pendingExpenses = useMemo(() => {
+    return expenses.filter((e) => (e.approval_status || "").toLowerCase() === "pending");
+  }, [expenses]);
+
   const filteredPending = useMemo(() => {
-    return expenses.filter((e) => {
-      const isPending = (e.approval_status || "").toLowerCase() === "pending";
-      if (!isPending) return false;
+    return pendingExpenses.filter((e) => {
       const q = searchTerm.toLowerCase();
       const matchesSearch =
         !q ||
@@ -1105,7 +1107,7 @@ function FinanceOperations() {
       const matchesDept = departmentFilter === "All" || e.department === departmentFilter;
       return matchesSearch && matchesDept;
     });
-  }, [expenses, searchTerm, departmentFilter]);
+  }, [pendingExpenses, searchTerm, departmentFilter]);
 
   const filteredAnomalies = useMemo(() => {
     const list = anomaliesData.anomalies || [];
