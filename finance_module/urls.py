@@ -1,8 +1,9 @@
-﻿from django.urls import path
+from django.urls import path
 from . import views
+from api.views import FinanceDetailView, FinanceListCreateView
 
 urlpatterns = [
-    path('', views.dashboard, name='finance_home'),
+    path('', FinanceListCreateView.as_view(), name='finance_home'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('expenses/', views.expense_list, name='expenses'),
     path('budgets/', views.budget_list, name='budgets'),
@@ -15,4 +16,5 @@ urlpatterns = [
     path('expenses/<str:expense_id>/approve/', views.approve_expense, name='approve'),
     path('expenses/<str:expense_id>/reject/', views.reject_expense, name='reject'),
     path('invoices/<str:invoice_number>/pay/', views.pay_invoice, name='pay-invoice'),
+    path('<str:finance_id>/', FinanceDetailView.as_view(), name='finance_detail'),
 ]

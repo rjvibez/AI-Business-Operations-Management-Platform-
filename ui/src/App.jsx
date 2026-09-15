@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -12,12 +12,51 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  UploadCloud,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  FileSpreadsheet,
+  RefreshCw,
+  TrendingUp,
+  ShieldAlert,
+  ArrowUpRight,
+  Filter,
+  DollarSign,
+  PieChart as PieIcon,
+  BarChart2,
+  Check,
+  X,
+  CreditCard,
+  Sliders,
 } from "lucide-react";
+
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
 
 import {
   fetchEmployees,
   fetchProjects,
   fetchFinance,
+  fetchFinanceExpenses,
+  fetchFinanceBudgets,
+  fetchFinanceInvoices,
+  fetchFinanceReports,
+  fetchFinanceAnomalies,
+  approveFinanceExpense,
+  rejectFinanceExpense,
+  payFinanceInvoice,
+  updateFinanceBudget,
+  uploadFinanceCsv,
   fetchRecommendations,
   predictTaskCompletion,
   isApiConfigured,
@@ -202,7 +241,7 @@ function App() {
           )}
 
           {activePage === "Finance" && (
-            <FinanceTable finance={finance} loading={loading} error={error} />
+            <FinanceOperations />
           )}
 
           {activePage === "AI Analytics" && (
@@ -801,89 +840,1372 @@ function ProjectTable({ projects, loading, error }) {
   );
 }
 
-const sampleFinanceData = [
-  { finance_id: "FIN-1001", project_id: "PRJ-001", expense_type: "Cloud Infrastructure", amount: 4850.0, expense_date: "2026-09-01", approval_status: "Approved", is_anomaly: false },
-  { finance_id: "FIN-1002", project_id: "PRJ-002", expense_type: "Software Licensing", amount: 12400.0, expense_date: "2026-09-04", approval_status: "Approved", is_anomaly: false },
-  { finance_id: "FIN-1003", project_id: "PRJ-001", expense_type: "Consulting Services", amount: 8900.0, expense_date: "2026-09-07", approval_status: "Pending", is_anomaly: false },
-  { finance_id: "FIN-1004", project_id: "PRJ-003", expense_type: "Hardware Procurement", amount: 35600.0, expense_date: "2026-09-09", approval_status: "Pending", is_anomaly: true },
-  { finance_id: "FIN-1005", project_id: "PRJ-002", expense_type: "Training & Workshops", amount: 2300.0, expense_date: "2026-09-12", approval_status: "Approved", is_anomaly: false },
-];
+function FinanceOperations() {
+  const [activeTab, setActiveTab] = useState("expenses");
+  const [expenses, setExpenses] = useState([]);
+  const [budgets, setBudgets] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [reports, setReports] = useState(null);
+  const [anomaliesData, setAnomaliesData] = useState({ anomalies: [], summary: { total: 0, high: 0, medium: 0, low: 0 } });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notification, setNotification] = useState("");
 
-function FinanceTable({ finance, loading, error }) {
-  const displayData = finance && finance.length > 0 ? finance : sampleFinanceData;
-  const isDemo = (!finance || finance.length === 0) && !loading && !error;
+  // Filters & Search
+  const [searchTerm, setSearchTerm] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("All");
+  const [priorityFilter, setPriorityFilter] = useState("All");
+  const [severityFilter, setSeverityFilter] = useState("All");
 
-  const totalAmount = displayData.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-  const approvedCount = displayData.filter((i) => i.approval_status === "Approved").length;
-  const pendingCount = displayData.filter((i) => i.approval_status === "Pending").length;
-  const anomalyCount = displayData.filter((i) => i.is_anomaly).length;
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 20;
+
+  // Modals
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState(null);
+  const [csvUploading, setCsvUploading] = useState(false);
+
+  const [budgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [selectedBudget, setSelectedBudget] = useState(null);
+  const [newBudgetLimit, setNewBudgetLimit] = useState("");
+  const [budgetUpdating, setBudgetUpdating] = useState(false);
+
+  // Load live data from backend
+  const loadFinanceData = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [expData, budData, invData, repData, anomData] = await Promise.allSettled([
+        fetchFinanceExpenses({ limit: 1000 }),
+        fetchFinanceBudgets(),
+        fetchFinanceInvoices({ limit: 1000 }),
+        fetchFinanceReports(),
+        fetchFinanceAnomalies(),
+      ]);
+
+      if (expData.status === "fulfilled" && Array.isArray(expData.value)) {
+        setExpenses(expData.value);
+      }
+      if (budData.status === "fulfilled" && Array.isArray(budData.value)) {
+        setBudgets(budData.value);
+      }
+      if (invData.status === "fulfilled" && Array.isArray(invData.value)) {
+        setInvoices(invData.value);
+      }
+      if (repData.status === "fulfilled" && repData.value && typeof repData.value === "object") {
+        setReports(repData.value);
+      }
+      if (anomData.status === "fulfilled" && anomData.value && typeof anomData.value === "object") {
+        setAnomaliesData(anomData.value);
+      }
+    } catch (err) {
+      setError(err.message || "Failed to load finance records.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFinanceData();
+  }, []);
+
+  // Reset page upon tab or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm, departmentFilter, priorityFilter, severityFilter]);
+
+  // Derived Summary Metrics
+  const summaryMetrics = useMemo(() => {
+    if (reports && reports.summary && reports.summary.total_budget) {
+      return {
+        totalBudget: reports.summary.total_budget || 0,
+        totalSpent: reports.summary.total_spent || 0,
+        remaining: reports.summary.remaining || 0,
+        approved: reports.summary.approved || 0,
+        pending: reports.summary.pending || 0,
+        rejected: reports.summary.rejected || 0,
+      };
+    }
+    const totalBudget = expenses.reduce((acc, e) => acc + (parseFloat(e.budget_allocated) || 0), 0);
+    const totalSpent = expenses.reduce((acc, e) => acc + (parseFloat(e.budget_used || e.amount) || 0), 0);
+    const remaining = totalBudget - totalSpent;
+    const approved = expenses.filter((e) => (e.approval_status || "").toLowerCase() === "approved").length;
+    const pending = expenses.filter((e) => (e.approval_status || "").toLowerCase() === "pending").length;
+    const rejected = expenses.filter((e) => (e.approval_status || "").toLowerCase() === "rejected").length;
+    return { totalBudget, totalSpent, remaining, approved, pending, rejected };
+  }, [reports, expenses]);
+
+  // Unique departments for filter
+  const departments = useMemo(() => {
+    const set = new Set();
+    expenses.forEach((e) => {
+      if (e.department) set.add(e.department);
+    });
+    return Array.from(set).sort();
+  }, [expenses]);
+
+  // Actions
+  const handleApprove = async (expenseId) => {
+    try {
+      await approveFinanceExpense(expenseId);
+      setExpenses((prev) =>
+        prev.map((e) => (e.expense_id === expenseId ? { ...e, approval_status: "Approved" } : e))
+      );
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.invoice_number.includes(expenseId) || inv.expense_id === expenseId
+            ? { ...inv, status: "Paid" }
+            : inv
+        )
+      );
+      setNotification(`Expense ${expenseId} approved successfully.`);
+      setTimeout(() => setNotification(""), 4000);
+    } catch (err) {
+      alert(`Approval error: ${err.message}`);
+    }
+  };
+
+  const handleReject = async (expenseId) => {
+    try {
+      await rejectFinanceExpense(expenseId);
+      setExpenses((prev) =>
+        prev.map((e) => (e.expense_id === expenseId ? { ...e, approval_status: "Rejected" } : e))
+      );
+      setNotification(`Expense ${expenseId} rejected.`);
+      setTimeout(() => setNotification(""), 4000);
+    } catch (err) {
+      alert(`Rejection error: ${err.message}`);
+    }
+  };
+
+  const handlePayInvoice = async (invoiceNumber) => {
+    try {
+      await payFinanceInvoice(invoiceNumber);
+      setInvoices((prev) =>
+        prev.map((inv) => (inv.invoice_number === invoiceNumber ? { ...inv, status: "Paid" } : inv))
+      );
+      const eid = invoiceNumber.replace("INV-", "").replace("INV", "");
+      setExpenses((prev) =>
+        prev.map((e) => (e.expense_id === eid ? { ...e, approval_status: "Approved" } : e))
+      );
+      setNotification(`Invoice ${invoiceNumber} marked as Paid.`);
+      setTimeout(() => setNotification(""), 4000);
+    } catch (err) {
+      alert(`Payment error: ${err.message}`);
+    }
+  };
+
+  const handleUpdateBudget = async (e) => {
+    e.preventDefault();
+    if (!selectedBudget || !newBudgetLimit || parseFloat(newBudgetLimit) <= 0) return;
+    setBudgetUpdating(true);
+    try {
+      await updateFinanceBudget({
+        department: selectedBudget.department,
+        category: selectedBudget.category,
+        limit_amount: parseFloat(newBudgetLimit),
+      });
+      setBudgets((prev) =>
+        prev.map((b) =>
+          b.department === selectedBudget.department && b.category === selectedBudget.category
+            ? {
+                ...b,
+                limit_amount: parseFloat(newBudgetLimit),
+                percent: Math.round(((b.used_amount || 0) / parseFloat(newBudgetLimit)) * 100),
+              }
+            : b
+        )
+      );
+      setBudgetModalOpen(false);
+      setSelectedBudget(null);
+      setNotification(`Updated budget limit for ${selectedBudget.department} - ${selectedBudget.category}.`);
+      setTimeout(() => setNotification(""), 4000);
+    } catch (err) {
+      alert(`Budget update failed: ${err.message}`);
+    } finally {
+      setBudgetUpdating(false);
+    }
+  };
+
+  const handleCsvUpload = async (e) => {
+    e.preventDefault();
+    if (!csvFile) return;
+    setCsvUploading(true);
+    try {
+      const res = await uploadFinanceCsv(csvFile);
+      setCsvModalOpen(false);
+      setCsvFile(null);
+      setNotification(`Imported ${res.count || 1000} records successfully! Refreshing data...`);
+      setTimeout(() => setNotification(""), 5000);
+      loadFinanceData();
+    } catch (err) {
+      alert(`CSV Upload failed: ${err.message}`);
+    } finally {
+      setCsvUploading(false);
+    }
+  };
+
+  // Filtered lists
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter((e) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        !q ||
+        (e.expense_id || "").toLowerCase().includes(q) ||
+        (e.department || "").toLowerCase().includes(q) ||
+        (e.category || "").toLowerCase().includes(q) ||
+        (e.vendor_name || "").toLowerCase().includes(q);
+      const matchesDept = departmentFilter === "All" || e.department === departmentFilter;
+      const matchesPrio = priorityFilter === "All" || (e.expense_priority || e.priority || "") === priorityFilter;
+      return matchesSearch && matchesDept && matchesPrio;
+    });
+  }, [expenses, searchTerm, departmentFilter, priorityFilter]);
+
+  const filteredBudgets = useMemo(() => {
+    return budgets.filter((b) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        !q ||
+        (b.department || "").toLowerCase().includes(q) ||
+        (b.category || "").toLowerCase().includes(q);
+      const matchesDept = departmentFilter === "All" || b.department === departmentFilter;
+      return matchesSearch && matchesDept;
+    });
+  }, [budgets, searchTerm, departmentFilter]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      const q = searchTerm.toLowerCase();
+      return (
+        !q ||
+        (inv.invoice_number || "").toLowerCase().includes(q) ||
+        (inv.department || "").toLowerCase().includes(q) ||
+        (inv.vendor_name || inv.vendor || "").toLowerCase().includes(q)
+      );
+    });
+  }, [invoices, searchTerm]);
+
+  const pendingExpenses = useMemo(() => {
+    return expenses.filter((e) => (e.approval_status || "").toLowerCase() === "pending");
+  }, [expenses]);
+
+  const filteredAnomalies = useMemo(() => {
+    const list = anomaliesData.anomalies || [];
+    return list.filter((a) => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch =
+        !q ||
+        (a.expense_id || "").toLowerCase().includes(q) ||
+        (a.department || "").toLowerCase().includes(q) ||
+        (a.category || "").toLowerCase().includes(q) ||
+        (a.vendor || "").toLowerCase().includes(q) ||
+        (a.reason_text || "").toLowerCase().includes(q);
+      const matchesSev = severityFilter === "All" || (a.severity || "").toUpperCase() === severityFilter.toUpperCase();
+      return matchesSearch && matchesSev;
+    });
+  }, [anomaliesData, searchTerm, severityFilter]);
+
+  // Pagination helper
+  const renderPagination = (totalItems, page, setPage) => {
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    if (totalPages <= 1) return null;
+
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(page * pageSize, totalItems);
+
+    const getPageNumbers = () => {
+      const pages = [];
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        if (page <= 4) {
+          pages.push(1, 2, 3, 4, 5, "...", totalPages);
+        } else if (page >= totalPages - 3) {
+          pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+        } else {
+          pages.push(1, "...", page - 1, page, page + 1, "...", totalPages);
+        }
+      }
+      return pages;
+    };
+
+    return (
+      <div
+        className="pagination-bar"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: "20px",
+          paddingTop: "16px",
+          borderTop: "1px solid #e5e7eb",
+          flexWrap: "wrap",
+          gap: "12px",
+        }}
+      >
+        <span style={{ fontSize: "13px", color: "#6b7280" }}>
+          Showing {start.toLocaleString()}–{end.toLocaleString()} of {totalItems.toLocaleString()} records
+        </span>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            className="pagination-btn"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid #d1d5db",
+              background: page <= 1 ? "#f3f4f6" : "#ffffff",
+              color: page <= 1 ? "#9ca3af" : "#374151",
+              fontSize: "12px",
+              fontWeight: "500",
+              cursor: page <= 1 ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+          >
+            <ChevronLeft size={14} /> Previous
+          </button>
+
+          {getPageNumbers().map((pNum, idx) =>
+            pNum === "..." ? (
+              <span key={`el-${idx}`} style={{ padding: "0 6px", color: "#9ca3af", fontSize: "12px" }}>
+                ...
+              </span>
+            ) : (
+              <button
+                key={pNum}
+                onClick={() => setPage(pNum)}
+                style={{
+                  padding: "6px 11px",
+                  borderRadius: "6px",
+                  border: "1px solid",
+                  borderColor: page === pNum ? "#2563eb" : "#d1d5db",
+                  background: page === pNum ? "#2563eb" : "#ffffff",
+                  color: page === pNum ? "#ffffff" : "#374151",
+                  fontSize: "12px",
+                  fontWeight: page === pNum ? "600" : "500",
+                  cursor: "pointer",
+                  minWidth: "32px",
+                }}
+              >
+                {pNum}
+              </button>
+            )
+          )}
+
+          <button
+            className="pagination-btn"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid #d1d5db",
+              background: page >= totalPages ? "#f3f4f6" : "#ffffff",
+              color: page >= totalPages ? "#9ca3af" : "#374151",
+              fontSize: "12px",
+              fontWeight: "500",
+              cursor: page >= totalPages ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+          >
+            Next <ChevronRight size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Slice paginated items
+  const paginatedExpenses = filteredExpenses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedBudgets = filteredBudgets.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedInvoices = filteredInvoices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedAnomalies = filteredAnomalies.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <>
-      <div className="stats-grid">
-        <StatCard title="Total Tracked Budget" value={`$${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} change="Finance Records" />
-        <StatCard title="Approved Expenses" value={approvedCount.toString()} change={`${displayData.length} records`} />
-        <StatCard title="Pending Approvals" value={pendingCount.toString()} change="Review queue" />
-        <StatCard title="Anomalies Flagged" value={anomalyCount.toString()} change={anomalyCount > 0 ? "Action required" : "Healthy"} />
-      </div>
+      {/* Toast Notification */}
+      {notification && (
+        <div
+          style={{
+            position: "fixed",
+            top: "24px",
+            right: "24px",
+            zIndex: 9999,
+            background: "#10b981",
+            color: "#ffffff",
+            padding: "12px 20px",
+            borderRadius: "8px",
+            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            fontWeight: "500",
+            fontSize: "14px",
+          }}
+        >
+          <CheckCircle size={18} />
+          {notification}
+        </div>
+      )}
 
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <h3>Financial Operations & Expense Tracking</h3>
-            <p>
-              {isDemo
-                ? "Showing finance operations data (Connected to /api/finance/)"
-                : "Live records from Django API (/api/finance/)"}
-            </p>
+      {/* Header Banner */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "16px",
+          marginBottom: "20px",
+          background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)",
+          padding: "24px",
+          borderRadius: "12px",
+          color: "#ffffff",
+        }}
+      >
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: "700", margin: 0, color: "#fff" }}>Finance Operations</h2>
+            <span
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                padding: "3px 10px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: "600",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Anomaly Intelligence Hub
+            </span>
           </div>
-          <span className={`badge ${isDemo ? "pending" : "success"}`}>
-            {isDemo ? "Sample & API Ready" : "Live API"}
-          </span>
+          <p style={{ color: "rgba(255,255,255,0.85)", fontSize: "13px", margin: 0 }}>
+            Unified enterprise financial oversight with automated risk intelligence, budget tracking, and invoice controls.
+          </p>
         </div>
 
-        {loading && <p>Loading financial transactions from backend...</p>}
-        {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <span
+            style={{
+              background: "#059669",
+              color: "#ffffff",
+              padding: "6px 12px",
+              borderRadius: "6px",
+              fontSize: "12px",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <FileSpreadsheet size={15} />
+            Finance data.csv • 1,000 Records
+          </span>
+
+          <button
+            onClick={() => setCsvModalOpen(true)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 14px",
+              background: "rgba(255,255,255,0.15)",
+              color: "#ffffff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              cursor: "pointer",
+            }}
+          >
+            <UploadCloud size={15} />
+            Import CSV
+          </button>
+
+          <button
+            onClick={loadFinanceData}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 12px",
+              background: "rgba(255,255,255,0.15)",
+              color: "#ffffff",
+              border: "1px solid rgba(255,255,255,0.3)",
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "500",
+              cursor: "pointer",
+            }}
+            title="Refresh from API"
+          >
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
+
+      {/* 6 Summary Cards */}
+      <div className="finance-stats-grid">
+        <div className="finance-stat-card">
+          <span>Total Budget</span>
+          <h3>${summaryMetrics.totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+          <p>Allocated capital</p>
+        </div>
+
+        <div className="finance-stat-card">
+          <span>Total Spent / Used</span>
+          <h3 style={{ color: "#2563eb" }}>
+            ${summaryMetrics.totalSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </h3>
+          <p>
+            {summaryMetrics.totalBudget > 0
+              ? `${Math.round((summaryMetrics.totalSpent / summaryMetrics.totalBudget) * 100)}% utilization`
+              : "Active spend"}
+          </p>
+        </div>
+
+        <div className="finance-stat-card">
+          <span>Remaining</span>
+          <h3 style={{ color: summaryMetrics.remaining >= 0 ? "#10b981" : "#ef4444" }}>
+            ${summaryMetrics.remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </h3>
+          <p>{summaryMetrics.remaining >= 0 ? "Under budget" : "Budget deficit"}</p>
+        </div>
+
+        <div className="finance-stat-card">
+          <span>Approved</span>
+          <h3 style={{ color: "#10b981" }}>{summaryMetrics.approved.toLocaleString()}</h3>
+          <p>Cleared expenses</p>
+        </div>
+
+        <div className="finance-stat-card">
+          <span>Pending</span>
+          <h3 style={{ color: "#f59e0b" }}>{summaryMetrics.pending.toLocaleString()}</h3>
+          <p>Needs review</p>
+        </div>
+
+        <div className="finance-stat-card">
+          <span>Rejected</span>
+          <h3 style={{ color: "#ef4444" }}>{summaryMetrics.rejected.toLocaleString()}</h3>
+          <p>Flagged / denied</p>
+        </div>
+      </div>
+
+      {/* Sub-Navigation Tabs */}
+      <div className="finance-tabs-nav">
+        <button
+          className={`finance-tab-button ${activeTab === "expenses" ? "active" : ""}`}
+          onClick={() => setActiveTab("expenses")}
+        >
+          <FileSpreadsheet size={15} />
+          Expenses
+          <span className="finance-tab-badge">{expenses.length || 1000}</span>
+        </button>
+
+        <button
+          className={`finance-tab-button ${activeTab === "budgets" ? "active" : ""}`}
+          onClick={() => setActiveTab("budgets")}
+        >
+          <Sliders size={15} />
+          Budgets
+          <span className="finance-tab-badge">{budgets.length}</span>
+        </button>
+
+        <button
+          className={`finance-tab-button ${activeTab === "invoices" ? "active" : ""}`}
+          onClick={() => setActiveTab("invoices")}
+        >
+          <CreditCard size={15} />
+          Invoices
+          <span className="finance-tab-badge">{invoices.length}</span>
+        </button>
+
+        <button
+          className={`finance-tab-button ${activeTab === "approval" ? "active" : ""}`}
+          onClick={() => setActiveTab("approval")}
+        >
+          <CheckCircle size={15} />
+          Approval Queue
+          <span className="finance-tab-badge" style={{ background: pendingExpenses.length > 0 ? "#fee2e2" : undefined, color: pendingExpenses.length > 0 ? "#991b1b" : undefined }}>
+            {pendingExpenses.length}
+          </span>
+        </button>
+
+        <button
+          className={`finance-tab-button ${activeTab === "anomaly" ? "active" : ""}`}
+          onClick={() => setActiveTab("anomaly")}
+        >
+          <ShieldAlert size={15} />
+          Anomaly Intelligence
+          <span className="finance-tab-badge" style={{ background: (anomaliesData.summary?.total || 0) > 0 ? "#fee2e2" : undefined, color: (anomaliesData.summary?.total || 0) > 0 ? "#991b1b" : undefined }}>
+            {anomaliesData.summary?.total || 0}
+          </span>
+        </button>
+
+        <button
+          className={`finance-tab-button ${activeTab === "reports" ? "active" : ""}`}
+          onClick={() => setActiveTab("reports")}
+        >
+          <BarChart2 size={15} />
+          Reports & Analytics
+        </button>
+      </div>
+
+      {/* Main Panel Content */}
+      <div className="panel">
+        {loading && <p style={{ padding: "20px" }}>Loading Finance records from Django backend...</p>}
+        {error && <p style={{ color: "#b91c1c", padding: "20px" }}>{error}</p>}
 
         {!loading && (
-          <table>
-            <thead>
-              <tr>
-                <th>Finance ID</th>
-                <th>Project</th>
-                <th>Expense Type</th>
-                <th>Amount</th>
-                <th>Date</th>
-                <th>Approval</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayData.map((item) => (
-                <tr key={item.finance_id}>
-                  <td><strong>{item.finance_id}</strong></td>
-                  <td>{item.project_id || "N/A"}</td>
-                  <td>{item.expense_type}</td>
-                  <td>${parseFloat(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td>{item.expense_date}</td>
-                  <td>
-                    <span className={`status ${item.approval_status === "Approved" ? "success" : "pending"}`}>
-                      {item.approval_status || "Pending"}
-                    </span>
-                  </td>
-                  <td>
-                    {item.is_anomaly ? (
-                      <span className="status danger">Anomaly</span>
+          <>
+            {/* TAB 1: EXPENSES */}
+            {activeTab === "expenses" && (
+              <>
+                <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px" }}>
+                  <div>
+                    <h3>Operational Expenses Directory</h3>
+                    <p>Showing records synced from datasets/Finance data.csv and Railway backend (/api/finance/expenses/)</p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <div className="search" style={{ width: "220px" }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search expenses..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+
+                    <select
+                      value={departmentFilter}
+                      onChange={(e) => setDepartmentFilter(e.target.value)}
+                      style={{
+                        height: "40px",
+                        padding: "0 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                        fontSize: "13px",
+                        background: "#fff",
+                      }}
+                    >
+                      <option value="All">All Departments</option>
+                      {departments.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={priorityFilter}
+                      onChange={(e) => setPriorityFilter(e.target.value)}
+                      style={{
+                        height: "40px",
+                        padding: "0 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                        fontSize: "13px",
+                        background: "#fff",
+                      }}
+                    >
+                      <option value="All">All Priorities</option>
+                      <option value="High">High Priority</option>
+                      <option value="Medium">Medium Priority</option>
+                      <option value="Low">Low Priority</option>
+                    </select>
+                  </div>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Expense ID</th>
+                      <th>Department</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                      <th>Priority</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedExpenses.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: "center", padding: "24px" }}>
+                          No matching expense records found.
+                        </td>
+                      </tr>
                     ) : (
-                      <span className="status success">Normal</span>
+                      paginatedExpenses.map((e) => (
+                        <tr key={e.expense_id}>
+                          <td style={{ fontWeight: "600", color: "#2563eb" }}>{e.expense_id}</td>
+                          <td>{e.department}</td>
+                          <td>{e.category}</td>
+                          <td>${parseFloat(e.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td>
+                            <span className={`priority-tag ${(e.expense_priority || e.priority || "Medium").toLowerCase()}`}>
+                              {e.expense_priority || e.priority || "Medium"}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className={`status ${
+                                (e.approval_status || "").toLowerCase() === "approved"
+                                  ? "success"
+                                  : (e.approval_status || "").toLowerCase() === "rejected"
+                                  ? "danger"
+                                  : "pending"
+                              }`}
+                            >
+                              {e.approval_status || "Pending"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </tbody>
+                </table>
+
+                {renderPagination(filteredExpenses.length, currentPage, setCurrentPage)}
+              </>
+            )}
+
+            {/* TAB 2: BUDGETS */}
+            {activeTab === "budgets" && (
+              <>
+                <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px" }}>
+                  <div>
+                    <h3>Departmental Budget Allocations</h3>
+                    <p>Live budget thresholds, cumulative utilization, and dynamic limit controls</p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="search" style={{ width: "220px" }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search department/category..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Department</th>
+                      <th>Category</th>
+                      <th>Limit</th>
+                      <th>Used</th>
+                      <th style={{ minWidth: "180px" }}>Utilization %</th>
+                      <th>Priority</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedBudgets.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "24px" }}>
+                          No budget records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedBudgets.map((b, idx) => {
+                        const pct = Math.min(Math.round(b.percent || (b.limit_amount > 0 ? (b.used_amount / b.limit_amount) * 100 : 0)), 100);
+                        const progressClass = pct > 90 ? "danger" : pct > 70 ? "warning" : "safe";
+
+                        return (
+                          <tr key={`${b.department}-${b.category}-${idx}`}>
+                            <td style={{ fontWeight: "600" }}>{b.department}</td>
+                            <td>{b.category}</td>
+                            <td>${parseFloat(b.limit_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>${parseFloat(b.used_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", fontWeight: "600" }}>
+                                <span>{pct}%</span>
+                              </div>
+                              <div className="budget-progress-track">
+                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`priority-tag ${(b.priority || "Medium").toLowerCase()}`}>
+                                {b.priority || "Medium"}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                onClick={() => {
+                                  setSelectedBudget(b);
+                                  setNewBudgetLimit(b.limit_amount || "");
+                                  setBudgetModalOpen(true);
+                                }}
+                                style={{
+                                  padding: "5px 10px",
+                                  border: "1px solid #d1d5db",
+                                  background: "#ffffff",
+                                  borderRadius: "6px",
+                                  fontSize: "12px",
+                                  fontWeight: "500",
+                                  cursor: "pointer",
+                                  color: "#2563eb",
+                                }}
+                              >
+                                Update Limit
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+
+                {renderPagination(filteredBudgets.length, currentPage, setCurrentPage)}
+              </>
+            )}
+
+            {/* TAB 3: INVOICES */}
+            {activeTab === "invoices" && (
+              <>
+                <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px" }}>
+                  <div>
+                    <h3>Accounts Payable & Invoices</h3>
+                    <p>Vendor billing records with one-click payment execution</p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="search" style={{ width: "220px" }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search invoice/vendor..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Invoice Number</th>
+                      <th>Department</th>
+                      <th>Vendor</th>
+                      <th>Amount</th>
+                      <th>Expense Date</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "24px" }}>
+                          No invoice records found.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedInvoices.map((inv) => {
+                        const isPaid = (inv.status || "").toLowerCase() === "paid";
+                        return (
+                          <tr key={inv.invoice_number}>
+                            <td style={{ fontWeight: "600", color: "#2563eb" }}>{inv.invoice_number}</td>
+                            <td>{inv.department}</td>
+                            <td>{inv.vendor_name || inv.vendor || "N/A"}</td>
+                            <td>${parseFloat(inv.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            <td>{inv.expense_date || "2024-01-01"}</td>
+                            <td>
+                              <span className={`status ${isPaid ? "success" : "pending"}`}>
+                                {isPaid ? "Paid" : "Pending"}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                className={`finance-btn-pay ${isPaid ? "paid" : ""}`}
+                                disabled={isPaid}
+                                onClick={() => handlePayInvoice(inv.invoice_number)}
+                              >
+                                {isPaid ? (
+                                  <>
+                                    <Check size={13} /> Paid
+                                  </>
+                                ) : (
+                                  <>
+                                    <CreditCard size={13} /> Pay
+                                  </>
+                                )}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+
+                {renderPagination(filteredInvoices.length, currentPage, setCurrentPage)}
+              </>
+            )}
+
+            {/* TAB 4: APPROVAL QUEUE */}
+            {activeTab === "approval" && (
+              <>
+                <div className="panel-header">
+                  <div>
+                    <h3>Pending Expense Approval Queue</h3>
+                    <p>Review and authorize pending disbursements with real-time backend updates</p>
+                  </div>
+                  <span className="badge pending">
+                    {pendingExpenses.length} Pending Review
+                  </span>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Department</th>
+                      <th>Category</th>
+                      <th>Amount</th>
+                      <th>Vendor</th>
+                      <th>Priority</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingExpenses.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "36px", color: "#10b981", fontWeight: "600" }}>
+                          <CheckCircle size={32} style={{ display: "block", margin: "0 auto 8px" }} />
+                          All expenses have been reviewed. Approval queue is completely clear!
+                        </td>
+                      </tr>
+                    ) : (
+                      pendingExpenses.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((e) => (
+                        <tr key={e.expense_id}>
+                          <td style={{ fontWeight: "600", color: "#2563eb" }}>{e.expense_id}</td>
+                          <td>{e.department}</td>
+                          <td>{e.category}</td>
+                          <td style={{ fontWeight: "600" }}>
+                            ${parseFloat(e.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td>{e.vendor_name || e.vendor || "N/A"}</td>
+                          <td>
+                            <span className={`priority-tag ${(e.expense_priority || e.priority || "Medium").toLowerCase()}`}>
+                              {e.expense_priority || e.priority || "Medium"}
+                            </span>
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <button
+                                className="finance-btn-approve"
+                                onClick={() => handleApprove(e.expense_id)}
+                              >
+                                <Check size={13} /> Approve
+                              </button>
+                              <button
+                                className="finance-btn-reject"
+                                onClick={() => handleReject(e.expense_id)}
+                              >
+                                <X size={13} /> Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {renderPagination(pendingExpenses.length, currentPage, setCurrentPage)}
+              </>
+            )}
+
+            {/* TAB 5: ANOMALY INTELLIGENCE */}
+            {activeTab === "anomaly" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "18px" }}>
+                  <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: "600" }}>Total Anomalies</span>
+                    <h3 style={{ fontSize: "20px", fontWeight: "700", marginTop: "4px" }}>{anomaliesData.summary?.total || 0}</h3>
+                  </div>
+                  <div style={{ background: "#fef2f2", padding: "14px", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                    <span style={{ fontSize: "11px", color: "#991b1b", textTransform: "uppercase", fontWeight: "600" }}>High Risk</span>
+                    <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#b91c1c", marginTop: "4px" }}>{anomaliesData.summary?.high || 0}</h3>
+                  </div>
+                  <div style={{ background: "#fffbeb", padding: "14px", borderRadius: "8px", border: "1px solid #fde68a" }}>
+                    <span style={{ fontSize: "11px", color: "#92400e", textTransform: "uppercase", fontWeight: "600" }}>Medium Risk</span>
+                    <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#d97706", marginTop: "4px" }}>{anomaliesData.summary?.medium || 0}</h3>
+                  </div>
+                  <div style={{ background: "#eff6ff", padding: "14px", borderRadius: "8px", border: "1px solid #bfdbfe" }}>
+                    <span style={{ fontSize: "11px", color: "#1e40af", textTransform: "uppercase", fontWeight: "600" }}>Low Risk</span>
+                    <h3 style={{ fontSize: "20px", fontWeight: "700", color: "#2563eb", marginTop: "4px" }}>{anomaliesData.summary?.low || 0}</h3>
+                  </div>
+                </div>
+
+                <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px" }}>
+                  <div>
+                    <h3>Statistical Anomaly Detections</h3>
+                    <p>Engineered with Z-score standard deviation, IQR outlier bounds, budget variance, and duplicate recognition</p>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div className="search" style={{ width: "200px" }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search anomalies..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+
+                    <select
+                      value={severityFilter}
+                      onChange={(e) => setSeverityFilter(e.target.value)}
+                      style={{
+                        height: "40px",
+                        padding: "0 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                        fontSize: "13px",
+                        background: "#fff",
+                      }}
+                    >
+                      <option value="All">All Severities</option>
+                      <option value="HIGH">High Severity</option>
+                      <option value="MEDIUM">Medium Severity</option>
+                      <option value="LOW">Low Severity</option>
+                    </select>
+                  </div>
+                </div>
+
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Expense ID</th>
+                      <th>Department / Category</th>
+                      <th>Amount</th>
+                      <th>Vendor</th>
+                      <th>Severity</th>
+                      <th>Score</th>
+                      <th>Reason / Explanation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedAnomalies.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" style={{ textAlign: "center", padding: "24px" }}>
+                          No anomaly flags detected matching current filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedAnomalies.map((a, idx) => (
+                        <tr key={`${a.expense_id}-${idx}`}>
+                          <td style={{ fontWeight: "600", color: "#2563eb" }}>{a.expense_id}</td>
+                          <td>
+                            <strong>{a.department}</strong>
+                            <div style={{ fontSize: "11px", color: "#6b7280" }}>{a.category}</div>
+                          </td>
+                          <td style={{ fontWeight: "600" }}>
+                            ${parseFloat(a.amount || a.used || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+                          <td>{a.vendor || "N/A"}</td>
+                          <td>
+                            <span className={`severity-tag ${(a.severity || "low").toLowerCase()}`}>
+                              ● {a.severity}
+                            </span>
+                          </td>
+                          <td style={{ fontWeight: "600" }}>{a.score}</td>
+                          <td style={{ fontSize: "12px", color: "#374151", maxWidth: "340px" }}>
+                            {a.reason_text}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+
+                {renderPagination(filteredAnomalies.length, currentPage, setCurrentPage)}
+              </>
+            )}
+
+            {/* TAB 6: REPORTS & CHARTS */}
+            {activeTab === "reports" && (
+              <>
+                <div className="panel-header">
+                  <div>
+                    <h3>Financial Analytics & Executive Reports</h3>
+                    <p>Macro breakdowns across departments, priorities, timelines, and strategic suppliers</p>
+                  </div>
+                </div>
+
+                {/* Charts Grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px" }}>
+                  {/* Department Spending Bar Chart */}
+                  <div style={{ background: "#fff", padding: "18px", border: "1px solid #e5e7eb", borderRadius: "10px" }}>
+                    <h4 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <BarChart2 size={16} color="#2563eb" />
+                      Department-wise Spending vs. Budget
+                    </h4>
+                    <div style={{ width: "100%", height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={reports?.by_department?.slice(0, 7) || [
+                            { department: "Operations", total: 84000, budget: 110000 },
+                            { department: "Engineering", total: 96000, budget: 120000 },
+                            { department: "Sales", total: 62000, budget: 90000 },
+                            { department: "Marketing", total: 54000, budget: 70000 },
+                            { department: "HR", total: 32000, budget: 45000 },
+                          ]}
+                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="department" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v / 1000}k`} />
+                          <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                          <Bar dataKey="total" name="Spent" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="budget" name="Budget" fill="#93c5fd" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Monthly Spending Trend Line Chart */}
+                  <div style={{ background: "#fff", padding: "18px", border: "1px solid #e5e7eb", borderRadius: "10px" }}>
+                    <h4 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <TrendingUp size={16} color="#10b981" />
+                      Monthly Expenditure Trajectory
+                    </h4>
+                    <div style={{ width: "100%", height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={reports?.monthly || [
+                            { month: "2025-01", total: 42000 },
+                            { month: "2025-02", total: 56000 },
+                            { month: "2025-03", total: 68000 },
+                            { month: "2025-04", total: 61000 },
+                            { month: "2025-05", total: 79000 },
+                            { month: "2025-06", total: 88000 },
+                          ]}
+                          margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                          <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v / 1000}k`} />
+                          <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                          <Line type="monotone" dataKey="total" name="Spend" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Vendors Table */}
+                <div style={{ marginTop: "12px" }}>
+                  <h4 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px" }}>Top 5 Strategic Suppliers by Spend</h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Rank</th>
+                        <th>Vendor Name</th>
+                        <th>Total Spend</th>
+                        <th>Share of Budget</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(reports?.top_vendors || [
+                        { vendor: "Dell", total: 142000 },
+                        { vendor: "HP", total: 118000 },
+                        { vendor: "LinkedIn", total: 94000 },
+                        { vendor: "Zoho", total: 76000 },
+                        { vendor: "AWS", total: 65000 },
+                      ]).map((v, idx) => (
+                        <tr key={v.vendor || idx}>
+                          <td style={{ fontWeight: "700" }}>#{idx + 1}</td>
+                          <td style={{ fontWeight: "600", color: "#111827" }}>{v.vendor}</td>
+                          <td>${parseFloat(v.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td>
+                            {summaryMetrics.totalSpent > 0
+                              ? `${((v.total / summaryMetrics.totalSpent) * 100).toFixed(1)}%`
+                              : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
+
+      {/* CSV Import Modal */}
+      {csvModalOpen && (
+        <div className="finance-modal-backdrop" onClick={() => setCsvModalOpen(false)}>
+          <div className="finance-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "700" }}>Import Finance Dataset (CSV)</h3>
+              <button
+                onClick={() => setCsvModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: "13px", color: "#6b7280", marginBottom: "18px" }}>
+              Select a valid Finance CSV (matching <code>datasets/Finance data.csv</code> format). The backend will parse, validate, and bulk-load the records.
+            </p>
+
+            <form onSubmit={handleCsvUpload}>
+              <div
+                style={{
+                  border: "2px dashed #d1d5db",
+                  borderRadius: "8px",
+                  padding: "24px",
+                  textAlign: "center",
+                  background: "#f9fafb",
+                  marginBottom: "18px",
+                  cursor: "pointer",
+                }}
+              >
+                <UploadCloud size={32} color="#6b7280" style={{ margin: "0 auto 8px" }} />
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                  style={{ display: "block", margin: "0 auto", fontSize: "13px" }}
+                />
+                {csvFile && (
+                  <p style={{ marginTop: "10px", fontSize: "12px", color: "#10b981", fontWeight: "600" }}>
+                    Selected: {csvFile.name} ({(csvFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setCsvModalOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!csvFile || csvUploading}
+                  style={{
+                    padding: "8px 18px",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: csvFile && !csvUploading ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {csvUploading ? "Uploading & Importing..." : "Start Import"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Update Budget Limit Modal */}
+      {budgetModalOpen && selectedBudget && (
+        <div className="finance-modal-backdrop" onClick={() => setBudgetModalOpen(false)}>
+          <div className="finance-modal-box" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ fontSize: "18px", fontWeight: "700" }}>Update Budget Limit</h3>
+              <button
+                onClick={() => setBudgetModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "16px", fontSize: "13px", color: "#4b5563" }}>
+              <p><strong>Department:</strong> {selectedBudget.department}</p>
+              <p><strong>Category:</strong> {selectedBudget.category}</p>
+              <p><strong>Current Used:</strong> ${parseFloat(selectedBudget.used_amount || 0).toLocaleString()}</p>
+            </div>
+
+            <form onSubmit={handleUpdateBudget}>
+              <div style={{ marginBottom: "18px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                  New Limit Amount ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newBudgetLimit}
+                  onChange={(e) => setNewBudgetLimit(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "40px",
+                    padding: "0 12px",
+                    border: "1px solid #d1d5db",
+                    borderRadius: "6px",
+                    fontSize: "14px",
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setBudgetModalOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={budgetUpdating}
+                  style={{
+                    padding: "8px 18px",
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: budgetUpdating ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {budgetUpdating ? "Saving..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

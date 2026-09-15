@@ -66,6 +66,76 @@ export async function createFinance(payload) {
   });
 }
 
+export async function fetchFinanceExpenses(params = {}) {
+  const query = new URLSearchParams();
+  if (params.limit) query.set('limit', params.limit);
+  if (params.status) query.set('status', params.status);
+  if (params.department) query.set('department', params.department);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest(`/finance/expenses/${qStr}`);
+}
+
+export async function fetchFinanceBudgets() {
+  return apiRequest('/finance/budgets/');
+}
+
+export async function fetchFinanceInvoices(params = {}) {
+  const query = new URLSearchParams();
+  if (params.limit) query.set('limit', params.limit);
+  const qStr = query.toString() ? `?${query.toString()}` : '';
+  return apiRequest(`/finance/invoices/${qStr}`);
+}
+
+export async function fetchFinanceReports() {
+  return apiRequest('/finance/reports/detailed/');
+}
+
+export async function fetchFinanceAnomalies() {
+  return apiRequest('/finance/anomalies/');
+}
+
+export async function approveFinanceExpense(expenseId) {
+  return apiRequest(`/finance/expenses/${expenseId}/approve/`, {
+    method: 'POST',
+  });
+}
+
+export async function rejectFinanceExpense(expenseId) {
+  return apiRequest(`/finance/expenses/${expenseId}/reject/`, {
+    method: 'POST',
+  });
+}
+
+export async function payFinanceInvoice(invoiceNumber) {
+  return apiRequest(`/finance/invoices/${invoiceNumber}/pay/`, {
+    method: 'POST',
+  });
+}
+
+export async function updateFinanceBudget(payload) {
+  return apiRequest('/finance/budgets/update/', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadFinanceCsv(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/finance/import-csv-upload/`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(`CSV Upload failed: ${response.status} ${errorData}`);
+  }
+
+  return response.json();
+}
+
 export async function fetchRecommendations({ topN = 5, requiredSkill = '', department = '', priority = '' } = {}) {
   const params = new URLSearchParams({ top_n: topN });
 

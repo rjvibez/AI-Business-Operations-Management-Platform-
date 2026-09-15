@@ -1,4 +1,4 @@
-﻿from django.shortcuts import render
+from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
@@ -15,8 +15,15 @@ def clean_priority(raw):
 
 @api_view(['GET'])
 def expense_list(request):
-    limit = int(request.GET.get('limit', 300))
-    qs = Expense.objects.all().order_by('-expense_id')[:limit]
+    limit = int(request.GET.get('limit', 1000))
+    status_filter = request.GET.get('status')
+    dept_filter = request.GET.get('department')
+    qs = Expense.objects.all()
+    if status_filter:
+        qs = qs.filter(approval_status__iexact=status_filter)
+    if dept_filter:
+        qs = qs.filter(department__iexact=dept_filter)
+    qs = qs.order_by('expense_id')[:limit]
     return Response([{
         'expense_id': e.expense_id,
         'department': e.department,
@@ -35,26 +42,56 @@ def expense_list(request):
 
 @api_view(['GET'])
 def budget_list(request):
-    qs = Expense.objects.all().order_by('-expense_id')[:300] 
-    return Response([{
-        'department': e.department,
-        'category': e.category,
-        'limit_amount': round(float(e.budget_allocated or e.amount or 100000),2),
-        'used_amount': round(float(e.budget_used or 0),2),
-        'percent': round((float(e.budget_used or 0)/float(e.budget_allocated or 1)*100),1) if e.budget_allocated else 0,
-        'priority': clean_priority(e.expense_priority),
-    } for e in qs])
+    dept_cats = {}
+    for e in Expense.objects.all():
+        key = (e.department, e.category)
+        if key not in dept_cats:
+            dept_cats[key] = {
+                'department': e.department,
+                'category': e.category,
+                'limit_amount': float(e.budget_allocated or e.amount or 100000),
+                'used_amount': float(e.budget_used or 0),
+                'priority': clean_priority(e.expense_priority),
+            }
+        else:
+            dept_cats[key]['used_amount'] += float(e.budget_used or 0)
+            if float(e.budget_allocated or 0) > dept_cats[key]['limit_amount']:
+                dept_cats[key]['limit_amount'] = float(e.budget_allocated)
+
+    res = []
+    for item in dept_cats.values():
+        limit = item['limit_amount'] or 1
+        used = item['used_amount']
+        item['limit_amount'] = round(limit, 2)
+        item['used_amount'] = round(used, 2)
+        item['percent'] = round((used / limit * 100), 1) if limit > 0 else 0
+        res.append(item)
+
+    if not res:
+        qs = Expense.objects.all().order_by('-expense_id')[:300]
+        res = [{
+            'department': e.department,
+            'category': e.category,
+            'limit_amount': round(float(e.budget_allocated or e.amount or 100000), 2),
+            'used_amount': round(float(e.budget_used or 0), 2),
+            'percent': round((float(e.budget_used or 0)/float(e.budget_allocated or 1)*100), 1) if e.budget_allocated else 0,
+            'priority': clean_priority(e.expense_priority),
+        } for e in qs]
+
+    return Response(res)
 
 @api_view(['GET'])
 def invoice_list(request):
-    qs = Expense.objects.all().order_by('-expense_id')[:150] 
+    limit = int(request.GET.get('limit', 1000))
+    qs = Expense.objects.all().order_by('expense_id')[:limit]
     return Response([{
-        'invoice_number': f"INV{e.expense_id}",
+        'invoice_number': f"INV-{e.expense_id}",
+        'expense_id': e.expense_id,
         'department': e.department,
         'vendor_name': e.vendor_name,
         'vendor': e.vendor_name,
-        'amount': float(e.budget_used or e.amount or 0),
-        'status': 'Paid' if e.approval_status=='Approved' else 'pending',
+        'amount': float(e.amount or e.budget_used or 0),
+        'status': 'Paid' if (e.approval_status or '').lower() == 'approved' else 'Pending',
         'expense_date': str(e.expense_date)[:10] if e.expense_date else '2024-01-01',
     } for e in qs])
 
@@ -216,31 +253,51 @@ def import_csv_upload(request):
 @api_view(['POST'])
 def approve_expense(request, expense_id):
     Expense.objects.filter(expense_id=expense_id).update(approval_status='Approved')
-    return Response({'message':'Approved'})
+    try:
+        from .models import Invoice
+        Invoice.objects.filter(invoice_number__in=[expense_id, f"INV{expense_id}", f"INV-{expense_id}"]).update(status='Paid')
+    except Exception:
+        pass
+    return Response({'message':'Approved', 'expense_id': expense_id})
 
 @csrf_exempt
 @api_view(['POST'])
 def reject_expense(request, expense_id):
     Expense.objects.filter(expense_id=expense_id).update(approval_status='Rejected')
-    return Response({'message':'Rejected'})
+    try:
+        from .models import Invoice
+        Invoice.objects.filter(invoice_number__in=[expense_id, f"INV{expense_id}", f"INV-{expense_id}"]).update(status='Rejected')
+    except Exception:
+        pass
+    return Response({'message':'Rejected', 'expense_id': expense_id})
 
 @csrf_exempt
 @api_view(['POST'])
 def pay_invoice(request, invoice_number):
-    eid=invoice_number.replace('INV','')
+    eid = invoice_number.replace('INV-', '').replace('INV', '').strip()
     Expense.objects.filter(expense_id=eid).update(approval_status='Approved')
-    return Response({'message':f'✅ {invoice_number} Paid!'})
+    try:
+        from .models import Invoice
+        Invoice.objects.filter(invoice_number__in=[invoice_number, f"INV{eid}", f"INV-{eid}"]).update(status='Paid')
+    except Exception:
+        pass
+    return Response({'message':f'✅ {invoice_number} Paid!', 'invoice_number': invoice_number})
 
 @csrf_exempt
 @api_view(['POST','PUT'])
 def update_budget_limit(request):
-    dept=request.data.get('department')
-    cat=request.data.get('category')
-    lim=float(request.data.get('limit_amount') or 0)
-    if lim<=0:
+    dept = request.data.get('department')
+    cat = request.data.get('category')
+    lim = float(request.data.get('limit_amount') or 0)
+    if lim <= 0:
         return Response({'message':'Invalid limit'}, status=400)
-    Expense.objects.filter(department=dept, category=cat).update(budget_allocated=lim, budget_limit=lim, amount=lim)
-    return Response({'message':'Updated','limit':lim})
+    Expense.objects.filter(department=dept, category=cat).update(budget_allocated=lim, budget_limit=lim)
+    try:
+        from .models import Budget
+        Budget.objects.filter(department=dept, category=cat).update(limit_amount=lim, budget_limit=lim)
+    except Exception:
+        pass
+    return Response({'message':'Updated', 'limit':lim, 'department': dept, 'category': cat})
 
 @csrf_exempt
 @api_view(['POST','GET'])

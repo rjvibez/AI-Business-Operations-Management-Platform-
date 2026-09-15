@@ -18,6 +18,10 @@ load_dotenv(Path(__file__).resolve().parent.parent / '.env')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+import sys
+if str(BASE_DIR.parent) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR.parent))
+
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 ALLOWED_HOSTS = [
@@ -41,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'api',
+    'finance_module',
 ]
 
 MIDDLEWARE = [
