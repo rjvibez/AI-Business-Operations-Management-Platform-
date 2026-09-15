@@ -9,6 +9,8 @@ import {
   Bell,
   Search,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
 } from "lucide-react";
 
@@ -439,12 +441,67 @@ function EmployeeTable({ employees, loading, error }) {
 }
 
 function ProjectTable({ projects, loading, error }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const itemsPerPage = 20;
+
+  const filteredProjects = projects.filter((project) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (project.project_id && project.project_id.toLowerCase().includes(term)) ||
+      (project.project_name && project.project_name.toLowerCase().includes(term)) ||
+      (project.status && project.status.toLowerCase().includes(term)) ||
+      (project.risk_level && project.risk_level.toLowerCase().includes(term)) ||
+      (project.description && project.description.toLowerCase().includes(term))
+    );
+  });
+
+  const totalItems = filteredProjects.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const validPage = Math.min(currentPage, totalPages);
+  const startIndex = (validPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedProjects = filteredProjects.slice(startIndex, endIndex);
+
+  const startDisplay = totalItems === 0 ? 0 : startIndex + 1;
+  const endDisplay = endIndex;
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (validPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, '...', totalPages);
+      } else if (validPage >= totalPages - 3) {
+        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', validPage - 1, validPage, validPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="panel">
-      <div className="panel-header">
+      <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
         <div>
           <h3>Project Management</h3>
           <p>Live data from the Django backend API (/api/projects/)</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="search" style={{ width: "240px" }}>
+            <Search size={16} />
+            <input
+              placeholder="Search projects..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -452,36 +509,138 @@ function ProjectTable({ projects, loading, error }) {
       {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
 
       {!loading && !error && (
-        <table>
-          <thead>
-            <tr>
-              <th>Project ID</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Risk</th>
-              <th>Start Date</th>
-              <th>Deadline</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.length === 0 ? (
+        <>
+          <table>
+            <thead>
               <tr>
-                <td colSpan="6">No project records found in database.</td>
+                <th>Project ID</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Risk</th>
+                <th>Start Date</th>
+                <th>Deadline</th>
               </tr>
-            ) : (
-              projects.map((project) => (
-                <tr key={project.project_id || project.project_name}>
-                  <td>{project.project_id}</td>
-                  <td>{project.project_name}</td>
-                  <td>{project.status}</td>
-                  <td>{project.risk_level}</td>
-                  <td>{project.start_date}</td>
-                  <td>{project.deadline}</td>
+            </thead>
+            <tbody>
+              {paginatedProjects.length === 0 ? (
+                <tr>
+                  <td colSpan="6">
+                    {projects.length === 0
+                      ? "No project records found in database."
+                      : "No matching projects found."}
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedProjects.map((project) => (
+                  <tr key={project.project_id || project.project_name}>
+                    <td style={{ fontWeight: "600", color: "#2563eb" }}>{project.project_id}</td>
+                    <td>{project.project_name}</td>
+                    <td>
+                      <span className={`status ${project.status === "Completed" ? "success" : project.status === "In Progress" ? "pending" : ""}`}>
+                        {project.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`status ${project.risk_level === "Low" ? "success" : project.risk_level === "Critical" ? "danger" : project.risk_level === "High" ? "warning" : "pending"}`}>
+                        {project.risk_level}
+                      </span>
+                    </td>
+                    <td>{project.start_date}</td>
+                    <td>{project.deadline}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {totalItems > 0 && (
+            <div className="pagination-bar" style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: "20px",
+              paddingTop: "16px",
+              borderTop: "1px solid #e5e7eb",
+              flexWrap: "wrap",
+              gap: "12px"
+            }}>
+              <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                Showing {startDisplay.toLocaleString()}–{endDisplay.toLocaleString()} of {totalItems.toLocaleString()} projects
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                  className="pagination-btn"
+                  disabled={validPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: validPage <= 1 ? "#f3f4f6" : "#ffffff",
+                    color: validPage <= 1 ? "#9ca3af" : "#374151",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: validPage <= 1 ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  <ChevronLeft size={14} /> Previous
+                </button>
+
+                {getPageNumbers().map((page, idx) =>
+                  page === '...' ? (
+                    <span key={`ellipsis-${idx}`} style={{ padding: "0 6px", color: "#9ca3af", fontSize: "12px" }}>
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      style={{
+                        padding: "6px 11px",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: validPage === page ? "#2563eb" : "#d1d5db",
+                        background: validPage === page ? "#2563eb" : "#ffffff",
+                        color: validPage === page ? "#ffffff" : "#374151",
+                        fontSize: "12px",
+                        fontWeight: validPage === page ? "600" : "500",
+                        cursor: "pointer",
+                        minWidth: "32px"
+                      }}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  className="pagination-btn"
+                  disabled={validPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: validPage >= totalPages ? "#f3f4f6" : "#ffffff",
+                    color: validPage >= totalPages ? "#9ca3af" : "#374151",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: validPage >= totalPages ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
