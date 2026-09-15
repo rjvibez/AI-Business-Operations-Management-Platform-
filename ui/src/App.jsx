@@ -392,12 +392,69 @@ function Dashboard() {
 }
 
 function EmployeeTable({ employees, loading, error }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const itemsPerPage = 20;
+
+  const filteredEmployees = employees.filter((employee) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (employee.employee_id && employee.employee_id.toLowerCase().includes(term)) ||
+      (employee.employee_name && employee.employee_name.toLowerCase().includes(term)) ||
+      (employee.department && employee.department.toLowerCase().includes(term)) ||
+      (employee.job_role && employee.job_role.toLowerCase().includes(term)) ||
+      (employee.availability_status && employee.availability_status.toLowerCase().includes(term)) ||
+      (employee.email && employee.email.toLowerCase().includes(term)) ||
+      (employee.skills && employee.skills.toLowerCase().includes(term))
+    );
+  });
+
+  const totalItems = filteredEmployees.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const validPage = Math.min(currentPage, totalPages);
+  const startIndex = (validPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
+
+  const startDisplay = totalItems === 0 ? 0 : startIndex + 1;
+  const endDisplay = endIndex;
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (validPage <= 4) {
+        pages.push(1, 2, 3, 4, 5, '...', totalPages);
+      } else if (validPage >= totalPages - 3) {
+        pages.push(1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, '...', validPage - 1, validPage, validPage + 1, '...', totalPages);
+      }
+    }
+    return pages;
+  };
+
   return (
     <div className="panel">
-      <div className="panel-header">
+      <div className="panel-header" style={{ flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
         <div>
           <h3>Employee Management</h3>
           <p>Live data from the Django backend API (/api/employees/)</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div className="search" style={{ width: "240px" }}>
+            <Search size={16} />
+            <input
+              placeholder="Search employees..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
         </div>
       </div>
 
@@ -405,36 +462,134 @@ function EmployeeTable({ employees, loading, error }) {
       {error && <p style={{ color: "#b91c1c" }}>{error}</p>}
 
       {!loading && !error && (
-        <table>
-          <thead>
-            <tr>
-              <th>Employee ID</th>
-              <th>Name</th>
-              <th>Department</th>
-              <th>Role</th>
-              <th>Availability</th>
-              <th>Workload</th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.length === 0 ? (
+        <>
+          <table>
+            <thead>
               <tr>
-                <td colSpan="6">No employee records found in database.</td>
+                <th>Employee ID</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>Role</th>
+                <th>Availability</th>
+                <th>Workload</th>
               </tr>
-            ) : (
-              employees.map((employee) => (
-                <tr key={employee.employee_id || employee.email}>
-                  <td>{employee.employee_id}</td>
-                  <td>{employee.employee_name}</td>
-                  <td>{employee.department}</td>
-                  <td>{employee.job_role}</td>
-                  <td>{employee.availability_status}</td>
-                  <td>{employee.workload_percentage}%</td>
+            </thead>
+            <tbody>
+              {paginatedEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan="6">
+                    {employees.length === 0
+                      ? "No employee records found in database."
+                      : "No matching employees found."}
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedEmployees.map((employee) => (
+                  <tr key={employee.employee_id || employee.email}>
+                    <td style={{ fontWeight: "600", color: "#2563eb" }}>{employee.employee_id}</td>
+                    <td>{employee.employee_name}</td>
+                    <td>{employee.department}</td>
+                    <td>{employee.job_role}</td>
+                    <td>
+                      <span className={`status ${employee.availability_status === "Available" ? "success" : employee.availability_status === "Busy" ? "pending" : "danger"}`}>
+                        {employee.availability_status}
+                      </span>
+                    </td>
+                    <td>{employee.workload_percentage}%</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {totalItems > 0 && (
+            <div className="pagination-bar" style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: "20px",
+              paddingTop: "16px",
+              borderTop: "1px solid #e5e7eb",
+              flexWrap: "wrap",
+              gap: "12px"
+            }}>
+              <span style={{ fontSize: "13px", color: "#6b7280" }}>
+                Showing {startDisplay.toLocaleString()}–{endDisplay.toLocaleString()} of {totalItems.toLocaleString()} employees
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                  className="pagination-btn"
+                  disabled={validPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: validPage <= 1 ? "#f3f4f6" : "#ffffff",
+                    color: validPage <= 1 ? "#9ca3af" : "#374151",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: validPage <= 1 ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  <ChevronLeft size={14} /> Previous
+                </button>
+
+                {getPageNumbers().map((page, idx) =>
+                  page === '...' ? (
+                    <span key={`ellipsis-${idx}`} style={{ padding: "0 6px", color: "#9ca3af", fontSize: "12px" }}>
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      style={{
+                        padding: "6px 11px",
+                        borderRadius: "6px",
+                        border: "1px solid",
+                        borderColor: validPage === page ? "#2563eb" : "#d1d5db",
+                        background: validPage === page ? "#2563eb" : "#ffffff",
+                        color: validPage === page ? "#ffffff" : "#374151",
+                        fontSize: "12px",
+                        fontWeight: validPage === page ? "600" : "500",
+                        cursor: "pointer",
+                        minWidth: "32px"
+                      }}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+
+                <button
+                  className="pagination-btn"
+                  disabled={validPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid #d1d5db",
+                    background: validPage >= totalPages ? "#f3f4f6" : "#ffffff",
+                    color: validPage >= totalPages ? "#9ca3af" : "#374151",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                    cursor: validPage >= totalPages ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
