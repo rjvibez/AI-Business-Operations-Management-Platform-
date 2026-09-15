@@ -61,6 +61,7 @@ import {
   predictTaskCompletion,
   isApiConfigured,
   configuredBaseUrl,
+  API_BASE_URL,
 } from "./lib/api";
 
 const menuItems = [
