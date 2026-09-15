@@ -70,14 +70,13 @@ def budget_list(request):
             dept_cats[key] = {
                 'department': e.department,
                 'category': e.category,
-                'limit_amount': float(e.budget_allocated or e.amount or 100000),
+                'limit_amount': float(e.budget_allocated or 0),
                 'used_amount': float(e.budget_used or 0),
                 'priority': clean_priority(e.expense_priority),
             }
         else:
             dept_cats[key]['used_amount'] += float(e.budget_used or 0)
-            if float(e.budget_allocated or 0) > dept_cats[key]['limit_amount']:
-                dept_cats[key]['limit_amount'] = float(e.budget_allocated)
+            dept_cats[key]['limit_amount'] += float(e.budget_allocated or 0)
 
     res = []
     for item in dept_cats.values():
@@ -310,9 +309,9 @@ def update_budget_limit(request):
     dept = request.data.get('department')
     cat = request.data.get('category')
     lim = float(request.data.get('limit_amount') or 0)
-    if lim <= 0:
-        return Response({'message':'Invalid limit'}, status=400)
-    Expense.objects.filter(department=dept, category=cat).update(budget_allocated=lim, budget_limit=lim)
+    cnt = Expense.objects.filter(department=dept, category=cat).count() or 1
+    per_exp = lim / cnt
+    Expense.objects.filter(department=dept, category=cat).update(budget_allocated=per_exp, budget_limit=per_exp)
     try:
         from .models import Budget
         Budget.objects.filter(department=dept, category=cat).update(limit_amount=lim, budget_limit=lim)

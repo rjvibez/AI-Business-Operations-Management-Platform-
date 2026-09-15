@@ -1666,11 +1666,11 @@ function FinanceOperations() {
 
                         let colorHex = "#10b981"; // < 80% → green
                         let progressClass = "safe";
-                        if (displayUtilization >= 100) {
-                          colorHex = "#ef4444"; // = 100% → red
+                        if (rawUtilization >= 100) {
+                          colorHex = "#ef4444"; // >= 100% → red
                           progressClass = "danger";
-                        } else if (displayUtilization >= 80) {
-                          colorHex = "#f59e0b"; // = 80% and < 100% → yellow/orange
+                        } else if (rawUtilization >= 80) {
+                          colorHex = "#f59e0b"; // >= 80% and < 100% → yellow/orange
                           progressClass = "warning";
                         }
 
@@ -1690,7 +1690,7 @@ function FinanceOperations() {
                                 )}
                               </div>
                               <div className="budget-progress-track">
-                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${displayUtilization}%` }} />
+                                <div className={`budget-progress-fill ${progressClass}`} style={{ width: `${displayUtilization}%`, background: colorHex }} />
                               </div>
                             </td>
                             <td>
