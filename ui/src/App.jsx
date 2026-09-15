@@ -1694,7 +1694,16 @@ function FinanceOperations() {
                               </div>
                             </td>
                             <td>
-                              <span className={`priority-tag ${(b.priority || "Medium").toLowerCase()}`}>
+                              <span
+                                className={`priority-tag ${(b.priority || "Medium").toLowerCase()}`}
+                                style={
+                                  (b.priority || "").toLowerCase() === "high"
+                                    ? { background: "#fee2e2", color: "#b91c1c" }
+                                    : (b.priority || "").toLowerCase() === "low"
+                                    ? { background: "#d1fae5", color: "#065f46" }
+                                    : { background: "#fef3c7", color: "#92400e" }
+                                }
+                              >
                                 {b.priority || "Medium"}
                               </span>
                             </td>
